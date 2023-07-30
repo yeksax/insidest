@@ -1,5 +1,5 @@
 import { atom } from "jotai";
-import { ColorData, ElementProps, Action } from "../interfaces";
+import { ColorData, ElementProps, Action } from "../../interfaces";
 
 export const colorsDataAtom = atom<ColorData[]>([]);
 export const elementsAtom = atom<ElementProps[]>([]);
@@ -10,3 +10,4 @@ export const optionsAtom = atom({
 
 export const actionsAtom = atom<Action>([]);
 export const undoneActionsAtom = atom<Action>([]);
+export const debugModeAtom = atom(false);

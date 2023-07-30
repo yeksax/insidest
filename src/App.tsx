@@ -1,14 +1,17 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { MouseEvent, useEffect, useState } from "react";
+import { MouseEvent, useEffect, useState, useRef } from "react";
 import {
 	actionsAtom,
 	colorsDataAtom,
+	debugModeAtom,
 	elementsAtom,
 	optionsAtom,
 	undoneActionsAtom,
-} from "../atoms/app";
-import { ElementProps, Vector2D } from "../interfaces";
+} from "./atoms/app";
+import { ElementProps, Rect, Vector2D } from "../interfaces";
 import { Menubar } from "./components/menubar";
+
+const FPS_INTERVAL = 10;
 
 function Element({ element, level }: { element: ElementProps; level: number }) {
 	const colorsData = useAtomValue(colorsDataAtom);
@@ -21,10 +24,10 @@ function Element({ element, level }: { element: ElementProps; level: number }) {
 
 	return (
 		<span
-			className='border absolute'
+			className='border absolute select-none'
 			data-color={element.color}
 			style={{
-				background: level === 0 ? "rgb(24 24 27)" : undefined,
+				// background: level === 0 ? "rgb(24 24 27)" : undefined,
 				borderColor: element.color,
 				left: element.x * 100 + "%",
 				top: element.y * 100 + "%",
@@ -42,7 +45,6 @@ function Element({ element, level }: { element: ElementProps; level: number }) {
 
 function Main() {
 	const [isCreating, setIsCreating] = useState(false);
-	const [isCreatingChildren, setIsCreatingChildren] = useState(false);
 	const [parentPosition, setParentPosition] = useState<DOMRect | null>(null);
 	const [creationData, setCreationData] = useState<Vector2D | null>(null);
 	const options = useAtomValue(optionsAtom);
@@ -52,45 +54,88 @@ function Main() {
 	const [elements, setElements] = useAtom(elementsAtom);
 	const [colorsData, setColorsData] = useAtom(colorsDataAtom);
 
-	function createInit(e: MouseEvent) {
-		setIsCreating(true);
+	useEffect(() => {
+		if (actions.length > 0) {
+			setElements(actions[actions.length - 1].elements);
+			setColorsData(actions[actions.length - 1].colors);
+		} else {
+			setElements([]);
+			setColorsData([]);
+		}
+	}, [actions]);
 
+	function positionCalculator(
+		initialPos: Vector2D,
+		currentPos: Vector2D,
+		parentRect: DOMRect,
+		keybinds: { ctrlKey: boolean; shiftKey: boolean }
+	): Rect {
+		const refWidth = parentRect.width;
+		const refHeight = parentRect.height;
+		const usesKeybind = keybinds.ctrlKey || keybinds.shiftKey;
+
+		const xDiff = currentPos.x - initialPos.x;
+		const yDiff = currentPos.y - initialPos.y;
+
+		const parentXAspectRatio = refWidth / refHeight;
+		const parentYAspectRatio = refHeight / refWidth;
+
+		let x = Math.min(initialPos.x, currentPos.x) - parentRect.x;
+		let y = Math.min(initialPos.y, currentPos.y) - parentRect.y;
+		let width = Math.abs(xDiff) / refWidth;
+		let height = Math.abs(yDiff) / refHeight;
+
+		if (keybinds.ctrlKey) {
+			if (xDiff > yDiff) width = height;
+			else height = width;
+		}
+
+		if (keybinds.shiftKey) {
+			if (xDiff > yDiff) width = height / parentXAspectRatio;
+			else height = width / parentYAspectRatio;
+		}
+
+		if (usesKeybind) {
+			if (xDiff < 0 && yDiff < 0) {
+				x += (width - initialPos.x - currentPos.x) / refWidth;
+				y += (height - initialPos.y - currentPos.y) / refHeight;
+				// y += (width - initialPos);
+			}
+		}
+
+		return {
+			x: x / refWidth,
+			y: y / refHeight,
+			width,
+			height,
+		};
+	}
+
+	function createInit(e: MouseEvent) {
+		const hexColor = options.currentColor;
 		const isChildren = (e.target as HTMLElement).tagName === "SPAN";
 		const parentRect = (e.target as HTMLElement).getBoundingClientRect();
 
-		const creationData = { x: e.clientX, y: e.clientY };
-
+		setIsCreating(true);
+		setCreationData({ x: e.clientX, y: e.clientY });
 		setParentPosition(parentRect);
-		setIsCreatingChildren(isChildren);
-		setCreationData(creationData);
-		const hexColor = options.currentColor;
 
-		let x = Math.min(creationData!.x, e.clientX) / innerWidth;
-		let y = Math.min(creationData!.y, e.clientY) / innerHeight;
-		let width = (e.clientX - creationData!.x) / innerWidth;
-		let height = (e.clientY - creationData!.y) / innerHeight;
-
-		if (isCreatingChildren) {
-			x =
-				Math.min(
-					creationData!.x - parentRect!.x,
-					e.clientX - parentRect!.x
-				) / parentRect!.width;
-			y =
-				Math.min(
-					creationData!.y - parentRect!.y,
-					e.clientY - parentRect!.y
-				) / parentRect!.height;
-			width = (e.clientX - creationData!.x) / parentRect!.width;
-			height = (e.clientY - creationData!.y) / parentRect!.height;
-		}
+		const { height, width, x, y } = positionCalculator(
+			{ x: e.clientX, y: e.clientY },
+			{ x: e.clientX, y: e.clientY },
+			parentRect,
+			{
+				ctrlKey: e.ctrlKey,
+				shiftKey: e.shiftKey,
+			}
+		);
 
 		const newElement = {
 			id: elements.length,
 			x,
 			y,
-			width: Math.abs(width),
-			height: Math.abs(height),
+			width,
+			height,
 			color: hexColor,
 			isChildren,
 		};
@@ -125,87 +170,39 @@ function Main() {
 		setActions((prev) => [...prev, { elements, colors: colorsData }]);
 		setUndoneActions([]);
 		setIsCreating(false);
-		setIsCreatingChildren(false);
 		setParentPosition(null);
 		setCreationData(null);
 	}
 
-	useEffect(() => {
-		if (actions.length > 0) {
-			setElements(actions[actions.length - 1].elements);
-			setColorsData(actions[actions.length - 1].colors);
-		} else {
-			setElements([]);
-			setColorsData([]);
-		}
-	}, [actions]);
-
 	function createHandler(e: MouseEvent) {
 		if (isCreating) {
 			const element = elements[elements.length - 1];
-			let width = (e.clientX - creationData!.x) / innerWidth;
-			let height = (e.clientY - creationData!.y) / innerHeight;
-			let x = Math.min(creationData!.x, e.clientX) / innerWidth;
-			let y = Math.min(creationData!.y, e.clientY) / innerHeight;
 
-			const xDiff = e.clientX - creationData!.x;
-			const yDiff = e.clientY - creationData!.y;
-
-			if (isCreatingChildren) {
-				x =
-					Math.min(
-						creationData!.x - parentPosition!.x,
-						e.clientX - parentPosition!.x
-					) / parentPosition!.width;
-				y =
-					Math.min(
-						creationData!.y - parentPosition!.y,
-						e.clientY - parentPosition!.y
-					) / parentPosition!.height;
-
-				width = (e.clientX - creationData!.x) / parentPosition!.width;
-				height = (e.clientY - creationData!.y) / parentPosition!.height;
-			}
-
-			if (e.shiftKey) {
-				let commomMultiplicator = innerHeight / innerWidth;
-
-				if (isCreatingChildren) {
-					commomMultiplicator =
-						parentPosition!.height / parentPosition!.width;
-
-					if (yDiff > xDiff) {
-						commomMultiplicator = innerWidth / innerHeight;
-						width = height * commomMultiplicator;
-					} else {
-						height = width * commomMultiplicator;
-					}
-				} else {
-					if (yDiff > xDiff) {
-						width = height * commomMultiplicator;
-					} else {
-						commomMultiplicator = innerWidth / innerHeight;
-						height = width * commomMultiplicator;
-					}
+			const { height, width, x, y } = positionCalculator(
+				creationData!,
+				{ x: e.clientX, y: e.clientY },
+				parentPosition!,
+				{
+					ctrlKey: e.ctrlKey,
+					shiftKey: e.shiftKey,
 				}
-			} else if (e.ctrlKey) {
-				width = height;
-			}
+			);
 
-			element.width = Math.abs(width);
-			element.height = Math.abs(height);
+			element.width = width;
+			element.height = height;
 			element.x = x;
 			element.y = y;
 
 			setElements((prev) => [
 				...prev.slice(0, elements.length - 1),
-				elements[elements.length - 1],
+				element,
 			]);
 		}
 	}
 
 	return (
 		<main
+			id='main'
 			className='w-full h-full'
 			onMouseDown={createInit}
 			onMouseUp={createExit}
@@ -220,9 +217,65 @@ function Main() {
 	);
 }
 
+function FPSCounter() {
+	const [fps, setFPS] = useState("0.00");
+	const intervalId = useRef<NodeJS.Timer | null>(null);
+
+	useEffect(() => {
+		let be = Date.now(),
+			fps = "0.00";
+
+		requestAnimationFrame(function loop() {
+			const now = Date.now();
+			fps = (1000 / (now - be)).toFixed(2).padStart(7, " ");
+			be = now;
+
+			requestAnimationFrame(loop);
+		});
+
+		intervalId.current = setInterval(() => {
+			setFPS(fps);
+		}, FPS_INTERVAL);
+
+		return () => {
+			if (intervalId.current) clearInterval(intervalId.current);
+			intervalId.current = setInterval(() => {
+				setFPS(fps);
+			}, FPS_INTERVAL);
+		};
+	}, []);
+
+	return <pre className=''>{fps}fps</pre>;
+}
+
+function ElementCounter() {
+	const [count, setCount] = useState(0);
+	const timer = useRef<NodeJS.Timer | null>(null);
+
+	useEffect(() => {
+		if (timer.current) clearInterval(timer.current);
+		timer.current = setInterval(() => {
+			setCount(document.querySelectorAll("span[data-color]").length);
+		}, 100);
+	}, []);
+
+	return <pre>{count} elementos</pre>;
+}
+
 function App() {
+	const debugMode = useAtomValue(debugModeAtom);
+
 	return (
 		<>
+			<div className='fixed top-4 left-8 flex flex-col items-end'>
+				{debugMode && (
+					<>
+						<FPSCounter />
+						<ElementCounter />
+					</>
+				)}
+			</div>
+
 			<Main />
 			<Menubar />
 		</>

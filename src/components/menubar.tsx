@@ -1,18 +1,20 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useEffect, useState } from "react";
+import { For } from "million/react";
 // @ts-expect-error No module definition
 import { ColorPicker, toColor, useColor } from "react-color-palette";
 import "react-color-palette/lib/css/styles.css";
 import { BiRedo, BiUndo } from "react-icons/bi";
-import { FiDroplet, FiMonitor, FiShuffle } from "react-icons/fi";
+import { FiDroplet, FiInfo, FiMonitor, FiShuffle } from "react-icons/fi";
 import {
 	actionsAtom,
 	colorsDataAtom,
+	debugModeAtom,
 	elementsAtom,
 	optionsAtom,
 	undoneActionsAtom,
-} from "../../atoms/app";
+} from "../atoms/app";
 
 function randomHEXColor() {
 	return "#" + Math.floor(Math.random() * 16777215).toString(16);
@@ -23,6 +25,7 @@ export function Menubar() {
 	const [color, setColor] = useColor("hex", `${options.currentColor}`);
 	const [elements, setElements] = useAtom(elementsAtom);
 	const [colorsData, setColorsData] = useAtom(colorsDataAtom);
+	const [debug, setDebug] = useAtom(debugModeAtom);
 
 	const [actions, setActions] = useAtom(actionsAtom);
 	const [undoneActions, setUndoneActions] = useAtom(undoneActionsAtom);
@@ -30,6 +33,13 @@ export function Menubar() {
 	function resetEverything() {
 		setElements([]);
 		setColorsData([]);
+		setActions((prev) => [
+			...prev,
+			{
+				colors: [],
+				elements: [],
+			},
+		]);
 	}
 
 	function randomizeColor() {
@@ -53,6 +63,10 @@ export function Menubar() {
 		if (lastAction) setActions((prev) => [...prev, lastAction]);
 	}
 
+	function debugMode() {
+		setDebug((debug) => !debug);
+	}
+
 	function shortcutHandler({
 		key: _key,
 		target,
@@ -74,6 +88,8 @@ export function Menubar() {
 			} else if (ctrlKey && shiftKey && !altKey) {
 				redo();
 			}
+		} else if (key === "i") {
+			if ((ctrlKey || shiftKey) && !(ctrlKey && shiftKey)) debugMode();
 		}
 	}
 
@@ -144,6 +160,18 @@ export function Menubar() {
 				action={redo}
 				disabled={undoneActions.length === 0}
 			/>
+			<div className=''></div>
+			<MenuItem
+				icon={
+					<FiInfo
+						style={{
+							opacity: debug ? 1 : 0.5,
+						}}
+						className='transition-all'
+					/>
+				}
+				action={debugMode}
+			/>
 			{/* <MenuItem icon={<FiTrash />} action={resetEverything} /> */}
 		</div>
 	);
@@ -155,17 +183,19 @@ function RecentColors({ setColor }: { setColor: (string: string) => void }) {
 
 	return (
 		<div className='w-full flex gap-x-5 gap-y-3 flex-wrap'>
-			{colorsData.map((color) => (
-				<div
-					onClick={() => setColor(toColor("hex", color.color))}
-					key={color.color}
-					className='rounded-full w-6 aspect-square'
-					style={{
-						cursor: `url('/cursor.cur'), auto`,
-						backgroundColor: color.color,
-					}}
-				></div>
-			))}
+			<For each={colorsData}>
+				{(color) => (
+					<div
+						onClick={() => setColor(toColor("hex", color.color))}
+						key={color.color}
+						className='rounded-full w-6 aspect-square'
+						style={{
+							cursor: `url('/cursor.cur'), auto`,
+							backgroundColor: color.color,
+						}}
+					></div>
+				)}
+			</For>
 		</div>
 	);
 }

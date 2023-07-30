@@ -17,6 +17,14 @@ export interface Vector2D {
 	x: number;
 	y: number;
 }
+
+export interface Rect {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
+
 export type Action = {
 	elements: ElementProps[];
 	colors: ColorData[];
