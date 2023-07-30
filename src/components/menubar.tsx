@@ -1,12 +1,11 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import { AnimatePresence, motion } from "framer-motion";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { useCallback, useEffect, useState } from "react";
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-expect-error
+import { useEffect, useState } from "react";
+// @ts-expect-error No module definition
 import { ColorPicker, toColor, useColor } from "react-color-palette";
 import "react-color-palette/lib/css/styles.css";
-import { FiDroplet, FiMonitor, FiRotateCcw, FiShuffle } from "react-icons/fi";
+import { BiRedo, BiUndo } from "react-icons/bi";
+import { FiDroplet, FiMonitor, FiShuffle } from "react-icons/fi";
 import {
 	actionsAtom,
 	colorsDataAtom,
@@ -28,13 +27,11 @@ export function Menubar() {
 	const [actions, setActions] = useAtom(actionsAtom);
 	const [undoneActions, setUndoneActions] = useAtom(undoneActionsAtom);
 
-	// eslint-disable-next-line react-hooks/exhaustive-deps
 	function resetEverything() {
 		setElements([]);
 		setColorsData([]);
 	}
 
-	// eslint-disable-next-line react-hooks/exhaustive-deps
 	function randomizeColor() {
 		setColor(toColor("hex", randomHEXColor()));
 	}
@@ -94,7 +91,7 @@ export function Menubar() {
 
 	return (
 		<div className='w-1/8 fixed bg-zinc-925 px-8 py-3 rounded-md box-content left-1/2 -translate-x-1/2 bottom-4 z-10 flex items-center gap-12 text-lg'>
-			<MenuItem icon={<FiDroplet fill={color.hex} stroke={color.hex} />}>
+			<MenuItem icon={<FiDroplet fill={color.hex} />}>
 				<div className='text-xs flex-col flex pb-4 gap-1 text-black bg-popover rounded-lg overflow-hidden'>
 					<ColorPicker
 						width={296}
@@ -137,7 +134,17 @@ export function Menubar() {
 					)}
 				</div>
 			</MenuItem>
-			<MenuItem icon={<FiRotateCcw />} action={resetEverything} />
+			<MenuItem
+				icon={<BiUndo className='transition-all' />}
+				action={undo}
+				disabled={actions.length === 0}
+			/>
+			<MenuItem
+				icon={<BiRedo className='transition-all' />}
+				action={redo}
+				disabled={undoneActions.length === 0}
+			/>
+			{/* <MenuItem icon={<FiTrash />} action={resetEverything} /> */}
 		</div>
 	);
 }
@@ -146,15 +153,11 @@ function RecentColors({ setColor }: { setColor: (string: string) => void }) {
 	const colorsData = useAtomValue(colorsDataAtom);
 	const options = useSetAtom(optionsAtom);
 
-	function randomizeColor() {
-		setColor(toColor("hex", randomHEXColor()));
-	}
-
 	return (
 		<div className='w-full flex gap-x-5 gap-y-3 flex-wrap'>
 			{colorsData.map((color) => (
 				<div
-					onClick={randomizeColor}
+					onClick={() => setColor(toColor("hex", color.color))}
 					key={color.color}
 					className='rounded-full w-6 aspect-square'
 					style={{
@@ -171,10 +174,12 @@ function MenuItem({
 	children,
 	icon,
 	action,
+	disabled,
 }: {
 	children?: React.ReactNode;
 	action?: () => void;
 	icon: React.ReactNode;
+	disabled?: boolean;
 }) {
 	const [display, setDisplay] = useState(false);
 
@@ -207,8 +212,12 @@ function MenuItem({
 				)}
 			</AnimatePresence>
 			<span
-				className='cursor-pointer'
+				style={{
+					opacity: disabled ? 0.5 : 1,
+					cursor: disabled ? "not-allowed" : "pointer",
+				}}
 				onClick={() => {
+					if (disabled) return;
 					if (action) action();
 					setDisplay(!display);
 				}}

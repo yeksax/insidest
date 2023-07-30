@@ -1,5 +1,5 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { MouseEvent, useState, useEffect } from "react";
+import { MouseEvent, useEffect, useState } from "react";
 import {
 	actionsAtom,
 	colorsDataAtom,
@@ -47,7 +47,7 @@ function Main() {
 	const [creationData, setCreationData] = useState<Vector2D | null>(null);
 	const options = useAtomValue(optionsAtom);
 	const [actions, setActions] = useAtom(actionsAtom);
-	const [undoneActions, setUndoneActions] = useAtom(undoneActionsAtom);
+	const setUndoneActions = useSetAtom(undoneActionsAtom);
 
 	const [elements, setElements] = useAtom(elementsAtom);
 	const [colorsData, setColorsData] = useAtom(colorsDataAtom);
@@ -148,6 +148,9 @@ function Main() {
 			let x = Math.min(creationData!.x, e.clientX) / innerWidth;
 			let y = Math.min(creationData!.y, e.clientY) / innerHeight;
 
+			const xDiff = e.clientX - creationData!.x;
+			const yDiff = e.clientY - creationData!.y;
+
 			if (isCreatingChildren) {
 				x =
 					Math.min(
@@ -165,12 +168,25 @@ function Main() {
 			}
 
 			if (e.shiftKey) {
+				let commomMultiplicator = innerHeight / innerWidth;
+
 				if (isCreatingChildren) {
-					width =
-						height *
-						(parentPosition!.height / parentPosition!.width);
+					commomMultiplicator =
+						parentPosition!.height / parentPosition!.width;
+
+					if (yDiff > xDiff) {
+						commomMultiplicator = innerWidth / innerHeight;
+						width = height * commomMultiplicator;
+					} else {
+						height = width * commomMultiplicator;
+					}
 				} else {
-					width = height * (innerHeight / innerWidth);
+					if (yDiff > xDiff) {
+						width = height * commomMultiplicator;
+					} else {
+						commomMultiplicator = innerWidth / innerHeight;
+						height = width * commomMultiplicator;
+					}
 				}
 			} else if (e.ctrlKey) {
 				width = height;
