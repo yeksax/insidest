@@ -5,6 +5,7 @@ export default {
 		extend: {
 			colors: {
 				"popover": "#181818",
+				"zinc-925": "#0E0E10"
 			}
 		},
 	},

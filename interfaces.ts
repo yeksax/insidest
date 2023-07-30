@@ -1,4 +1,3 @@
-
 export interface ElementProps {
 	id: number;
 	x: number;
@@ -18,3 +17,7 @@ export interface Vector2D {
 	x: number;
 	y: number;
 }
+export type Action = {
+	elements: ElementProps[];
+	colors: ColorData[];
+}[];

@@ -1,10 +1,19 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { AnimatePresence, motion } from "framer-motion";
-import { useAtom, useSetAtom } from "jotai";
-import { useEffect, useState } from "react";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { useCallback, useEffect, useState } from "react";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-expect-error
 import { ColorPicker, toColor, useColor } from "react-color-palette";
 import "react-color-palette/lib/css/styles.css";
 import { FiDroplet, FiMonitor, FiRotateCcw, FiShuffle } from "react-icons/fi";
-import { colorsDataAtom, elementsAtom, optionsAtom } from "../../atoms/app";
+import {
+	actionsAtom,
+	colorsDataAtom,
+	elementsAtom,
+	optionsAtom,
+	undoneActionsAtom,
+} from "../../atoms/app";
 
 function randomHEXColor() {
 	return "#" + Math.floor(Math.random() * 16777215).toString(16);
@@ -13,30 +22,100 @@ function randomHEXColor() {
 export function Menubar() {
 	const [options, setOptions] = useAtom(optionsAtom);
 	const [color, setColor] = useColor("hex", `${options.currentColor}`);
-	const setElements = useSetAtom(elementsAtom);
-	const setColorData = useSetAtom(colorsDataAtom);
+	const [elements, setElements] = useAtom(elementsAtom);
+	const [colorsData, setColorsData] = useAtom(colorsDataAtom);
+
+	const [actions, setActions] = useAtom(actionsAtom);
+	const [undoneActions, setUndoneActions] = useAtom(undoneActionsAtom);
+
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	function resetEverything() {
+		setElements([]);
+		setColorsData([]);
+	}
+
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	function randomizeColor() {
+		setColor(toColor("hex", randomHEXColor()));
+	}
+
+	function setCurrentRecursion(value: number) {
+		setOptions((prev) => ({ ...prev, maxRecursion: value }));
+	}
+
+	function undo() {
+		setActions((actions) => {
+			const lastAction = actions[actions.length - 1];
+			if (lastAction) setUndoneActions((prev) => [...prev, lastAction]);
+			return actions.slice(0, -1);
+		});
+	}
+
+	function redo() {
+		const lastAction = undoneActions.pop();
+		if (lastAction) setActions((prev) => [...prev, lastAction]);
+	}
+
+	function shortcutHandler({
+		key: _key,
+		target,
+		shiftKey,
+		ctrlKey,
+		altKey,
+	}: KeyboardEvent) {
+		const key = _key.toLowerCase();
+
+		if (key === "r") {
+			if (shiftKey || ctrlKey || altKey) {
+				resetEverything();
+			} else {
+				randomizeColor();
+			}
+		} else if (key === "z") {
+			if (ctrlKey && !shiftKey && !altKey) {
+				undo();
+			} else if (ctrlKey && shiftKey && !altKey) {
+				redo();
+			}
+		}
+	}
 
 	useEffect(() => {
 		setOptions((prev) => ({ ...prev, currentColor: color.hex }));
 	}, [color]);
 
+	useEffect(() => {
+		document.addEventListener("keydown", shortcutHandler);
+
+		return () => {
+			document.removeEventListener("keydown", shortcutHandler);
+		};
+	}, [elements, colorsData, undoneActions, actions]);
+
 	return (
-		<div className='w-1/8 fixed bg-zinc-800 px-8 py-3 rounded-lg box-content left-1/2 -translate-x-1/2 bottom-4 z-10 flex items-center gap-12 text-lg'>
+		<div className='w-1/8 fixed bg-zinc-925 px-8 py-3 rounded-md box-content left-1/2 -translate-x-1/2 bottom-4 z-10 flex items-center gap-12 text-lg'>
 			<MenuItem icon={<FiDroplet fill={color.hex} stroke={color.hex} />}>
-				<div className='text-xs text-black bg-zinc-950 rounded-lg overflow-hidden'>
+				<div className='text-xs flex-col flex pb-4 gap-1 text-black bg-popover rounded-lg overflow-hidden'>
 					<ColorPicker
 						width={296}
 						height={156}
 						color={color}
 						onChange={setColor}
+						hideHSV
+						hideRGB
 						dark
 					/>
+					<div className='px-6 flex flex-col w-full gap-4'>
+						<RecentColors setColor={setColor} />
+						<div
+							className='cursor-pointer self-end'
+							onClick={randomizeColor}
+						>
+							<FiShuffle className='text-sm text-white cursor-pointer pointer-events-none' />
+						</div>
+					</div>
 				</div>
 			</MenuItem>
-			<MenuItem
-				icon={<FiShuffle />}
-				action={() => setColor(toColor("hex", randomHEXColor()))}
-			></MenuItem>
 			<MenuItem icon={<FiMonitor />}>
 				<div className='px-6 py-4 w-max bg-popover rounded-lg flex flex-col relative'>
 					<span className='text-sm text-zinc-200 absolute bg-popover px-2 left-8 top-2.5'>
@@ -46,10 +125,7 @@ export function Menubar() {
 						value={options.maxRecursion}
 						min={1}
 						onChange={(e) =>
-							setOptions({
-								...options,
-								maxRecursion: parseInt(e.target.value),
-							})
+							setCurrentRecursion(e.target.valueAsNumber)
 						}
 						className='mt-2 bg-transparent outline-none focus:border-zinc-400 transition-all border-zinc-600 border-2 rounded-md px-4 py-1 w-full'
 						type='number'
@@ -61,13 +137,32 @@ export function Menubar() {
 					)}
 				</div>
 			</MenuItem>
-			<MenuItem
-				icon={<FiRotateCcw />}
-				action={() => {
-					setColorData([]);
-					setElements([]);
-				}}
-			/>
+			<MenuItem icon={<FiRotateCcw />} action={resetEverything} />
+		</div>
+	);
+}
+
+function RecentColors({ setColor }: { setColor: (string: string) => void }) {
+	const colorsData = useAtomValue(colorsDataAtom);
+	const options = useSetAtom(optionsAtom);
+
+	function randomizeColor() {
+		setColor(toColor("hex", randomHEXColor()));
+	}
+
+	return (
+		<div className='w-full flex gap-x-5 gap-y-3 flex-wrap'>
+			{colorsData.map((color) => (
+				<div
+					onClick={randomizeColor}
+					key={color.color}
+					className='rounded-full w-6 aspect-square'
+					style={{
+						cursor: `url('/cursor.cur'), auto`,
+						backgroundColor: color.color,
+					}}
+				></div>
+			))}
 		</div>
 	);
 }
@@ -84,8 +179,8 @@ function MenuItem({
 	const [display, setDisplay] = useState(false);
 
 	useEffect(() => {
-		document.addEventListener("mouseup", (e) => {
-			if (["MAIN", "DIV"].includes((e.target as HTMLElement).tagName)) {
+		document.addEventListener("mousedown", (e) => {
+			if (["MAIN", "SPAN"].includes((e.target as HTMLElement).tagName)) {
 				setDisplay(false);
 			}
 		});
@@ -111,7 +206,7 @@ function MenuItem({
 					</motion.div>
 				)}
 			</AnimatePresence>
-			<div
+			<span
 				className='cursor-pointer'
 				onClick={() => {
 					if (action) action();
@@ -119,7 +214,7 @@ function MenuItem({
 				}}
 			>
 				{icon}
-			</div>
+			</span>
 		</div>
 	);
 }

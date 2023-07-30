@@ -1,6 +1,12 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { MouseEvent, useState } from "react";
-import { colorsDataAtom, elementsAtom, optionsAtom } from "../atoms/app";
+import { MouseEvent, useState, useEffect } from "react";
+import {
+	actionsAtom,
+	colorsDataAtom,
+	elementsAtom,
+	optionsAtom,
+	undoneActionsAtom,
+} from "../atoms/app";
 import { ElementProps, Vector2D } from "../interfaces";
 import { Menubar } from "./components/menubar";
 
@@ -14,7 +20,7 @@ function Element({ element, level }: { element: ElementProps; level: number }) {
 	}
 
 	return (
-		<div
+		<span
 			className='border absolute'
 			data-color={element.color}
 			style={{
@@ -30,7 +36,7 @@ function Element({ element, level }: { element: ElementProps; level: number }) {
 				color?.children.map((el) => (
 					<Element element={el} key={el.id} level={level + 1} />
 				))}
-		</div>
+		</span>
 	);
 }
 
@@ -40,14 +46,16 @@ function Main() {
 	const [parentPosition, setParentPosition] = useState<DOMRect | null>(null);
 	const [creationData, setCreationData] = useState<Vector2D | null>(null);
 	const options = useAtomValue(optionsAtom);
+	const [actions, setActions] = useAtom(actionsAtom);
+	const [undoneActions, setUndoneActions] = useAtom(undoneActionsAtom);
 
 	const [elements, setElements] = useAtom(elementsAtom);
-	const setColorData = useSetAtom(colorsDataAtom);
+	const [colorsData, setColorsData] = useAtom(colorsDataAtom);
 
 	function createInit(e: MouseEvent) {
 		setIsCreating(true);
 
-		const isChildren = (e.target as HTMLElement).tagName === "DIV";
+		const isChildren = (e.target as HTMLElement).tagName === "SPAN";
 		const parentRect = (e.target as HTMLElement).getBoundingClientRect();
 
 		const creationData = { x: e.clientX, y: e.clientY };
@@ -91,34 +99,46 @@ function Main() {
 
 		if (isChildren) {
 			const parentColor = (e.target as HTMLElement).dataset.color;
-
-			setColorData((prev) =>
+			setColorsData((prev) =>
 				prev.map((color) =>
 					color.color === parentColor
 						? {
 								...color,
 								children: [...color.children, newElement],
-						}
+						  }
 						: color
 				)
 			);
 		}
 
-		setColorData((prev) => [
-			...prev,
-			{
-				color: hexColor,
-				children: [],
-			},
-		]);
+		if (colorsData.find((el) => el.color === hexColor) === undefined)
+			setColorsData((prev) => [
+				...prev,
+				{
+					color: hexColor,
+					children: [],
+				},
+			]);
 	}
 
 	function createExit() {
+		setActions((prev) => [...prev, { elements, colors: colorsData }]);
+		setUndoneActions([]);
 		setIsCreating(false);
 		setIsCreatingChildren(false);
 		setParentPosition(null);
 		setCreationData(null);
 	}
+
+	useEffect(() => {
+		if (actions.length > 0) {
+			setElements(actions[actions.length - 1].elements);
+			setColorsData(actions[actions.length - 1].colors);
+		} else {
+			setElements([]);
+			setColorsData([]);
+		}
+	}, [actions]);
 
 	function createHandler(e: MouseEvent) {
 		if (isCreating) {
@@ -142,6 +162,18 @@ function Main() {
 
 				width = (e.clientX - creationData!.x) / parentPosition!.width;
 				height = (e.clientY - creationData!.y) / parentPosition!.height;
+			}
+
+			if (e.shiftKey) {
+				if (isCreatingChildren) {
+					width =
+						height *
+						(parentPosition!.height / parentPosition!.width);
+				} else {
+					width = height * (innerHeight / innerWidth);
+				}
+			} else if (e.ctrlKey) {
+				width = height;
 			}
 
 			element.width = Math.abs(width);
