@@ -3,9 +3,12 @@ import { MouseEvent, useEffect, useState, useRef } from "react";
 import {
 	actionsAtom,
 	colorsDataAtom,
+	currentColorTargetAtom,
+	currentTargetAtom,
 	debugModeAtom,
 	elementsAtom,
 	optionsAtom,
+	rotationAtom,
 	undoneActionsAtom,
 } from "./atoms/app";
 import { ElementProps, Rect, Vector2D } from "../interfaces";
@@ -14,20 +17,75 @@ import { Menubar } from "./components/menubar";
 const FPS_INTERVAL = 10;
 
 function Element({ element, level }: { element: ElementProps; level: number }) {
-	const colorsData = useAtomValue(colorsDataAtom);
+	const [colorsData, setColorsData] = useAtom(colorsDataAtom);
+	const setCurrentColorTarget = useSetAtom(currentColorTargetAtom);
+	const setCurrentRotation = useSetAtom(rotationAtom);
+	const setCurrentTarget = useSetAtom(currentTargetAtom);
+	const debugMode = useAtomValue(debugModeAtom);
+
 	const options = useAtomValue(optionsAtom);
 
 	const color = colorsData.find((el) => el.color === element.color);
-	if (element.isChildren) {
-		// console.log(colorsData, color, element.color);
+
+	function rotateInit(e: MouseEvent) {
+		const element = e.target as HTMLElement;
+		const rect = element.getBoundingClientRect()
+
+		const middleX = rect.left + rect.width / 2;
+		const middleY = rect.top + rect.height / 2;
+
+		const angle = Math.atan2(e.clientY - middleY, e.clientX - middleX);
+		const rotation = angle * (180 / Math.PI);
+
+		setCurrentRotation(rotation)
+		setCurrentColorTarget(element.dataset.color);
+		setCurrentTarget(element);
 	}
+
+	function initHandler(e: MouseEvent) {
+		if (options.mode === "default") {
+			// createInit(e);
+		} else if (options.mode === "rotate") {
+			rotateInit(e);
+		} else {
+			//
+		}
+	}
+
+	function moveHandler(e: MouseEvent) {
+		if (options.mode === "default") {
+			// createHandler(e);
+		} else if (options.mode === "rotate") {
+			// rotateHandler(e);
+		} else {
+			//TODO
+		}
+	}
+
+	function exitHandler(e: MouseEvent) {
+		if (options.mode === "default") {
+			// createExit();
+		} else if (options.mode === "rotate") {
+			// rotateExit();
+		} else {
+			//TODO
+		}
+	}
+
+	if (!color) return <></>
 
 	return (
 		<span
-			className='border absolute select-none'
+			className={`border absolute select-none text-xs`}
+			onMouseDown={initHandler}
+			onMouseMove={moveHandler}
+			onMouseUp={exitHandler}
 			data-color={element.color}
+			data-rotation={color?.rotation}
 			style={{
 				// background: level === 0 ? "rgb(24 24 27)" : undefined,
+				rotate: `${color?.rotation}deg`,
+				content: `${element.color}deg`,
 				borderColor: element.color,
 				left: element.x * 100 + "%",
 				top: element.y * 100 + "%",
@@ -35,8 +93,10 @@ function Element({ element, level }: { element: ElementProps; level: number }) {
 				height: element.height * 100 + "%",
 			}}
 		>
+			{debugMode && `${(color.rotation * level).toFixed(2)}deg`}
+
 			{level < options.maxRecursion &&
-				color?.children.map((el) => (
+				color.children.map((el) => (
 					<Element element={el} key={el.id} level={level + 1} />
 				))}
 		</span>
@@ -47,9 +107,12 @@ function Main() {
 	const [isCreating, setIsCreating] = useState(false);
 	const [parentPosition, setParentPosition] = useState<DOMRect | null>(null);
 	const [creationData, setCreationData] = useState<Vector2D | null>(null);
-	const options = useAtomValue(optionsAtom);
+	const [options, setOptions] = useAtom(optionsAtom);
 	const [actions, setActions] = useAtom(actionsAtom);
 	const setUndoneActions = useSetAtom(undoneActionsAtom);
+	const [currentColorTarget, setCurrentColorTarget] = useAtom(currentColorTargetAtom);
+	const [currentRotation, setCurrentRotation] = useAtom(rotationAtom);
+	const [currentTarget, setCurrentTarget] = useAtom(currentTargetAtom);
 
 	const [elements, setElements] = useAtom(elementsAtom);
 	const [colorsData, setColorsData] = useAtom(colorsDataAtom);
@@ -148,9 +211,9 @@ function Main() {
 				prev.map((color) =>
 					color.color === parentColor
 						? {
-								...color,
-								children: [...color.children, newElement],
-						  }
+							...color,
+							children: [...color.children, newElement],
+						}
 						: color
 				)
 			);
@@ -160,6 +223,8 @@ function Main() {
 			setColorsData((prev) => [
 				...prev,
 				{
+					rotation: 0,
+					warp: "",
 					color: hexColor,
 					children: [],
 				},
@@ -200,13 +265,75 @@ function Main() {
 		}
 	}
 
+	function rotateHandler(e: MouseEvent) {
+		const rect = currentTarget?.getBoundingClientRect();
+
+		if (!rect) return;
+
+		const middleX = rect.left + rect.width / 2;
+		const middleY = rect.top + rect.height / 2;
+
+		const angle = Math.atan2(e.clientY - middleY, e.clientX - middleX);
+
+		setCurrentRotation(angle * (180 / Math.PI));
+		const rotation = (angle * (180 / Math.PI)) - currentRotation;
+
+		setColorsData((prev) =>
+			prev.map((color) => {
+				if (color.color !== currentTarget!.dataset.color) return color;
+
+				return {
+					...color,
+					rotation: color.rotation + rotation,
+				};
+			})
+		);
+	}
+
+	function rotateExit() {
+		setCurrentColorTarget(undefined);
+		setCurrentTarget(undefined);
+		setActions((prev) => [...prev, { elements, colors: colorsData }]);
+		setUndoneActions([]);
+	}
+
+	function initHandler(e: MouseEvent) {
+		if (options.mode === "default") {
+			createInit(e);
+		} else if (options.mode === "rotate") {
+			// rotateInit(e);
+		} else {
+			//
+		}
+	}
+
+	function moveHandler(e: MouseEvent) {
+		if (options.mode === "default") {
+			createHandler(e);
+		} else if (options.mode === "rotate") {
+			rotateHandler(e);
+		} else {
+			//TODO
+		}
+	}
+
+	function exitHandler(e: MouseEvent) {
+		if (options.mode === "default") {
+			createExit();
+		} else if (options.mode === "rotate") {
+			rotateExit();
+		} else {
+			//TODO
+		}
+	}
+
 	return (
 		<main
 			id='main'
 			className='w-full h-full'
-			onMouseDown={createInit}
-			onMouseUp={createExit}
-			onMouseMove={createHandler}
+			onMouseDown={initHandler}
+			onMouseMove={moveHandler}
+			onMouseUp={exitHandler}
 		>
 			{elements
 				.filter((element) => !element.isChildren)
@@ -264,9 +391,15 @@ function ElementCounter() {
 
 function App() {
 	const debugMode = useAtomValue(debugModeAtom);
+	const options = useAtomValue(optionsAtom);
 
 	return (
-		<>
+		<div
+			className='w-full h-full'
+			style={{
+				cursor: options.mode === "rotate" ? "crosshair" : "default",
+			}}
+		>
 			<div className='fixed top-4 left-8 flex flex-col items-end'>
 				{debugMode && (
 					<>
@@ -275,10 +408,9 @@ function App() {
 					</>
 				)}
 			</div>
-
 			<Main />
 			<Menubar />
-		</>
+		</div>
 	);
 }
 

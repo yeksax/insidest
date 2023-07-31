@@ -67,6 +67,10 @@ export function Menubar() {
 		setDebug((debug) => !debug);
 	}
 
+	useEffect(() => {
+		localStorage.setItem("debugMode", String(debug));
+	}, [debug]);
+
 	function shortcutHandler({
 		key: _key,
 		target,
@@ -77,18 +81,24 @@ export function Menubar() {
 		const key = _key.toLowerCase();
 
 		if (key === "r") {
+			(document.activeElement as HTMLElement)?.blur()
 			if (shiftKey || ctrlKey || altKey) {
 				resetEverything();
 			} else {
-				randomizeColor();
+				if (options.mode === "default")
+					setOptions({ ...options, mode: "rotate" });
+				else setOptions({ ...options, mode: "default" });
+				// randomizeColor();
 			}
 		} else if (key === "z") {
+			(document.activeElement as HTMLElement)?.blur()
 			if (ctrlKey && !shiftKey && !altKey) {
 				undo();
 			} else if (ctrlKey && shiftKey && !altKey) {
 				redo();
 			}
 		} else if (key === "i") {
+			(document.activeElement as HTMLElement)?.blur()
 			if ((ctrlKey || shiftKey) && !(ctrlKey && shiftKey)) debugMode();
 		}
 	}

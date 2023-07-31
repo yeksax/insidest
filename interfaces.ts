@@ -10,6 +10,8 @@ export interface ElementProps {
 
 export interface ColorData {
 	color: string;
+	warp: string;
+	rotation: number;
 	children: ElementProps[];
 }
 
@@ -29,3 +31,9 @@ export type Action = {
 	elements: ElementProps[];
 	colors: ColorData[];
 }[];
+
+export interface Options {
+	currentColor: string;
+	maxRecursion: number;
+	mode: "default" | "move" | "rotate";
+}
